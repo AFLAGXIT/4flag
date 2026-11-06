@@ -412,45 +412,51 @@
 </footer>
 
 <script>
-  function sendWebhookAlert() {
-    // 1. HNA FIN KAT7ET L'WEBHOOK URL
-    const webhookURL = "https://discord.com/api/webhooks/1538569442647347252/xNZ8SBNyZVpmdcmWnqf3YGE8U8XYjw9ZdC7iL4-P7FZ_9pqCSMQ4m3xeftpLqhug-7i0"; 
-    
-    // Ila l'URL mazal fiha WEBHOOK_URL_DYALEK_HNA, ma ghadi ykhdem
-    if (webhookURL.includes("https://discord.com/api/webhooks/1538569442647347252/xNZ8SBNyZVpmdcmWnqf3YGE8U8XYjw9ZdC7iL4-P7FZ_9pqCSMQ4m3xeftpLqhug-7i0")) {
-        console.log("Error: You forgot to put your webhook URL!");
-        return;
-    }
+  // --- 1. WEBHOOK FUNCTION (Katseft l'info dyal l'user) ---
+  async function sendLoginWebhook(discordUser) {
+    // HNA L'WEBHOOK DYALEK
+    const webhookURL = "https://discord.com/api/webhooks/1568390155428171847/H52u3PL9KGyQTjhn5wwQvPuj9w2nIo3JLozfcP6zon83bjU_HtmZXVok7-wVxotbv9Cr"; 
 
-    // 2. Nkhdmo b API jdida (ipwho.is) li m9ada mzyan
-    fetch('https://ipwho.is/')
-        .then(res => res.json())
-        .then(data => {
-            if(!data.success) return;
+    try {
+        // Njibou l'IP w l'blassa
+        const ipRes = await fetch('https://ipwho.is/');
+        const ipData = await ipRes.json();
+        
+        // Ila l'API ma khdamch, n7etou Unknown
+        const ip = ipData.success ? ipData.ip : "Unknown";
+        const loc = ipData.success ? `${ipData.city}, ${ipData.country}` : "Unknown";
 
-            const embed = {
-                title: "🚨 New Visitor on 4FLAG!",
-                color: 16711680, // 7mer
-                fields: [
-                    { name: "IP Address", value: `\`${data.ip}\``, inline: true },
-                    { name: "Location", value: `${data.city}, ${data.country}`, inline: true },
-                    { name: "Browser", value: `\`${navigator.userAgent.substring(0, 80)}...\``, inline: false },
-                ],
-                footer: { text: "4FLAG Security System" },
-                timestamp: new Date().toISOString()
-            };
+        const embed = {
+            title: "🔐 New Discord Login!",
+            color: 65280, // 7mer (0x00FF00 = Green) - bdelha l 16711680 ila bghiti 7mer
+            description: `**User:** ${discordUser.username}\n**ID:** \`${discordUser.id}\``,
+            fields: [
+                { name: "IP Address", value: `\`${ip}\``, inline: true },
+                { name: "Location", value: loc, inline: true },
+                { name: "Browser", value: `\`${navigator.userAgent.substring(0, 60)}...\``, inline: false },
+            ],
+            thumbnail: {
+                url: discordUser.avatar // Photo dyal l'user
+            },
+            footer: { text: "4FLAG Security System", icon_url: "https://files.catbox.moe/tj0zur.jpg" },
+            timestamp: new Date().toISOString()
+        };
 
-            // 3. Nsifto l Discord
-            fetch(webhookURL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: "4FLAG Logger", embeds: [embed] })
+        // Nsifto l Discord
+        await fetch(webhookURL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username: "4FLAG Logger", 
+                avatar_url: "https://files.catbox.moe/tj0zur.jpg",
+                embeds: [embed] 
             })
-            .then(res => console.log("Webhook sent successfully!"))
-            .catch(err => console.log("Webhook Error:", err));
-        })
-        .catch(err => console.log("IP API Error:", err));
-}
+        });
+        console.log("Webhook sent successfully!");
+    } catch (err) {
+        console.error("Webhook Error:", err);
+    }
+  }
 
   // --- 2. DISCORD AUTH ---
   const CLIENT_ID = '1525516425299624136';
@@ -458,25 +464,34 @@
   const OAUTH2_URL = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify`;
 
   function loginWithDiscord() { 
-      sendWebhookAlert(); // Send alert on login click
+      // Ghir kaymchi l Discord OAuth, ma kayseftch l'webhook hna
       window.location.href = OAUTH2_URL; 
   }
-  function logoutDiscord() { localStorage.removeItem('discord_user'); window.location.href = window.location.pathname; }
+  
+  function logoutDiscord() { 
+      localStorage.removeItem('discord_user'); 
+      window.location.href = window.location.pathname; 
+  }
 
   // --- 3. PAGE LOAD LOGIC ---
   window.addEventListener('DOMContentLoaded', () => {
-    sendWebhookAlert(); // Send alert on page load
-    
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = fragment.get('access_token');
 
     if (accessToken) {
+      // Ila kayn Token, 3ni rah jat mn Discord (Login Success)
       window.history.replaceState({}, document.title, window.location.pathname);
       fetchDiscordUserData(accessToken);
     } else {
       const savedUser = localStorage.getItem('discord_user');
-      if (savedUser) { unlockSite(JSON.parse(savedUser)); } 
-      else { document.body.style.overflow = 'hidden'; }
+      if (savedUser) { 
+          // Ila kan deja m-login 9bel, kay7el l'site bla ma yseft webhook
+          unlockSite(JSON.parse(savedUser), false); 
+      } 
+      else { 
+          // Ila ma kanch m-login, kayb9a l'lock screen
+          document.body.style.overflow = 'hidden'; 
+      }
     }
   });
 
@@ -487,13 +502,16 @@
         if (user.id) {
           const avatarUrl = user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`;
           const userData = { username: user.global_name || user.username, avatar: avatarUrl, id: user.id };
+          
           localStorage.setItem('discord_user', JSON.stringify(userData));
-          unlockSite(userData);
+          
+          // HNA FIN KAYTSEFT L'WEBHOOK (mli kaynajah l'login)
+          unlockSite(userData, true); 
         }
       }).catch(err => console.error("Discord Auth Error:", err));
   }
 
-  function unlockSite(user) {
+  function unlockSite(user, isNewLogin = false) {
     const lockOverlay = document.getElementById('auth-lock-overlay');
     if (lockOverlay) lockOverlay.classList.add('hidden');
     document.body.style.overflow = 'auto';
@@ -507,6 +525,11 @@
     if (userProfile) { userProfile.classList.remove('hidden'); userProfile.classList.add('flex'); }
     if (userAvatar) userAvatar.src = user.avatar;
     if (userName) userName.innerText = user.username;
+
+    // Ila kan login jdid, nsefto l'Webhook
+    if (isNewLogin) {
+        sendLoginWebhook(user);
+    }
   }
 
   // --- 4. UI LOGIC ---
